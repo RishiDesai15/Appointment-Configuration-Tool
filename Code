@@ -1,0 +1,84 @@
+import os
+import wmill
+from deepdiff import DeepDiff
+
+def main(json1, json2, exclude_paths=None):
+    """
+    Compare two JSON objects and generate an AAI Update JSON with differences,
+    showing only keys and their new values from the second JSON.
+    """
+    # Default paths to exclude
+    default_exclude_paths = ["root['scope']","root['isActive']","root['settings']['durationOne']","root['settings']['isWalkinAllowed']","root['settings']['isWaitlisted']","root['settings']['isPublic']","root['settings']['isReschedulingAllowed']","root['settings']['bookingStartDate']","root['settings']['bookingEndDate']","root['settings']['bookInAdvanceRestrictionMin']","root['settings']['durationTwo']",
+                        "root['settings']['durationThree']","root['settings']['durationFour']","root['settings']['durationFive']","root['settings']['durationSix']","root['settings']['bookingInterval']","root['settings']['minimumAge']","root['settings']['maximumAge']","root['settings']['price']","root['settings']['enabledMethods']","root['settings']['documentationLinkDefault']","root['settings']['isPharmacistClinic']","root['settings']['isExternalClinicSupported']"]
+
+
+    #clean the exclude path
+    if exclude_paths and len(exclude_paths) > 0:
+        exclude_paths = exclude_paths.replace(" ","").split(",")
+    else:
+        exclude_paths = []
+
+    # Combine user-defined exclude paths with default excludes
+    combined_exclude_paths = default_exclude_paths + exclude_paths
+
+    # Perform a deep comparison between the two JSON objects
+    diff = DeepDiff(json1, json2, exclude_paths=combined_exclude_paths, ignore_order=True)
+
+    # Initialize the resulting differences dictionary
+    concise_diff = {}
+
+    # Check for differences in "documentTemplates"
+    if "values_changed" in diff:
+        for path, change in diff["values_changed"].items():
+            if "documentTemplates" in path:
+                # Place "documentTemplates" under "settings"
+                concise_diff.setdefault("settings", {})
+                if "documentTemplates" in json1.get("settings", {}):
+                    concise_diff["settings"]["documentTemplates"] = json1["settings"]["documentTemplates"]
+                else:
+                    concise_diff["settings"]["documentTemplates"] = []  # Handle edge case where it's missing
+                continue
+            
+            keys = path.replace("root", "").strip("[]").replace("']['", "/").replace("'", "").split("/")
+            ref = concise_diff
+            for key in keys[:-1]:
+                ref = ref.setdefault(key, {})
+            ref[keys[-1]] = change["old_value"]
+
+    print(diff)
+
+    # Process dictionary removals
+    if "dictionary_item_removed" in diff:
+        for path in diff["dictionary_item_removed"]:
+            keys = path.replace("root", "").strip("[]").replace("']['", "/").replace("'", "").split("/")
+            ref = concise_diff
+            temp_json1 = json1
+            for key in keys[:-1]:
+                temp_json1 = temp_json1.get(key, {})
+                ref = ref.setdefault(key, {})
+            # Add only if the key exists in json1
+            if keys[-1] in temp_json1:
+                ref[keys[-1]] = temp_json1[keys[-1]]
+
+    # Ensure "langCode" is added to "details" if "details" section is modified
+    if "details" in concise_diff:
+        concise_diff["details"]["langCode"] = "en-CA"
+
+        keys_to_remove = []
+        language1 = {"langCode": "fr-CA"}
+        for key in concise_diff['details']:
+            if "translations]" in key:
+                actualKey = key.replace("translations][0][","")
+                language1[actualKey] = concise_diff['details'][key]
+                keys_to_remove.append(key)
+        
+
+        if len(keys_to_remove) > 0:
+            #this means we had translations
+            translations = [language1]
+            concise_diff["details"]["translations"] = translations
+
+        for key_to_remove in keys_to_remove:
+            concise_diff['details'].pop(key_to_remove)
+
+    return concise_diff
