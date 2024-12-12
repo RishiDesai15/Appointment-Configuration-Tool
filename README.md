@@ -6,4 +6,3 @@ A Python project designed to detect and summarize differences between two JSON o
 - Developed logic to enforce consistent inclusion of specific attributes (e.g., "langCode": "en-CA") in modified sections like details.
 - Optimized handling of added, removed, and changed dictionary items for clear and concise difference reporting.
 - Designed with flexibility for user-defined exclusions and tailored to complex nested JSON structures.
-<img width="654" alt="Screenshot 2024-12-11 at 11 40 50 PM" src="https://github.com/user-attachments/assets/7dab32c0-d8b5-4798-ab9a-5dfde512fc02" />
